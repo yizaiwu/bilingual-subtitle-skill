@@ -1,6 +1,6 @@
-# Bilingual Subtitle Generator
+# Bilingual Subtitle Generator Skill
 
-一键生成双语字幕并烧录到视频，支持卡拉OK逐词高亮模式。
+一键极速生成双语字幕并烧录到视频，支持卡拉OK逐词高亮模式。
 
 ## 功能特性
 
@@ -27,7 +27,7 @@ brew install ffmpeg        # macOS
 
 ### 使用方法
 
-在 Claude Code 中：
+在 Claude Code 或其他支持 skill 的工具中：
 
 ```bash
 # 双语字幕（默认）
@@ -39,6 +39,7 @@ brew install ffmpeg        # macOS
 # 卡拉OK模式（逐词高亮）
 /bilingual-subtitle video.mp4 --karaoke --fontsize 24
 ```
+当然也可以更简单，比如一句 “用 skill，对 1.mp4 加字幕”、“用 skill，对 1.mp4 仅输出字幕”，随便 ，都行，模型们都能理解。
 
 或直接运行脚本：
 
