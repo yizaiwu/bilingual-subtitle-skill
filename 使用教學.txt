@@ -1,0 +1,401 @@
+﻿========================================================================
+  雙語字幕技能 (bilingual-subtitle) 使用教學
+  安裝日期：2026-10-11
+  原始專案：https://github.com/vorojar/bilingual-subtitle-skill
+========================================================================
+
+一句話說明
+------------------------------------------------------------------------
+給它一個影片，它會自動聽出影片裡在講什麼，翻譯成繁體中文，然後把「原文 +
+譯文」兩行字幕燒進畫面下方，輸出一個新影片。也可以用卡拉OK模式做逐詞
+高亮，或者只給你字幕檔不燒錄。
+
+原理是：Whisper 語音辨識 -> AI 翻譯（Google 翻譯是可選備用）-> FFmpeg 燒錄字幕。
+
+
+一、裝在哪裡
+------------------------------------------------------------------------
+技能目錄（u1s1 會自動讀取這裡）：
+  C:\Users\user\.agents\skills\bilingual-subtitle\
+      SKILL.md              技能說明（u1s1 判斷何時使用這個技能）
+      scripts\process.py    主程式（一鍵完成全部流程）
+      scripts\extract_srt.py   只做語音辨識
+      scripts\translate_srt.py 只做翻譯
+      scripts\merge_srt.py     只做字幕合併
+      scripts\burn_srt.py      只做燒錄
+
+原始碼（git clone 下來的副本，方便日後更新）：
+  D:\Python\bilingual-subtitle-skill\
+
+這份教學放在原始碼目錄下。技能目錄的 scripts 內容與這裡一致。
+
+
+二、怎麼用
+------------------------------------------------------------------------
+最簡單的方式：直接用嘴巴講，u1s1 會自己看懂。
+
+  用 skill 給 1.mp4 加中英字幕
+  用 skill 給 1.mp4 只輸出字幕檔案
+  用 skill 給 movie.mp4 做卡拉OK逐詞高亮，字大一點
+  用 skill 給 drama.mp4 只輸出譯文字幕（影片本身已有英文硬字幕時）
+  用 skill 給 video.mp4 加字幕，日文翻繁體中文
+  用 skill 給 1.mp4 加中英字幕（預設由 AI 翻譯）
+
+直接敲指令也可以（u1s1 對話裡或普通命令列都行）：
+
+  python "C:\Users\user\.agents\skills\bilingual-subtitle\scripts\process.py" 影片檔 [選項]
+
+常用範例：
+
+  # 中英雙語字幕（預設，會燒錄到影片）
+  python "...\process.py" video.mp4
+
+  # 只要字幕檔，不燒錄（最快，適合先看效果）
+  python "...\process.py" video.mp4 --srt-only
+
+  # 僅原文，不翻譯
+  python "...\process.py" video.mp4 --source-only
+
+  # 僅譯文（影片已有原文硬字幕時用）
+  python "...\process.py" video.mp4 --chinese-only
+
+  # 卡拉OK逐詞高亮（會自動變成只輸出原文）
+  python "...\process.py" video.mp4 --karaoke --fontsize 24
+
+  # 日文影片翻繁體中文，用 turbo 模型提高準確率（本機已快取，免下載）
+  python "...\process.py" video.mp4 -l ja -m large-v3-turbo
+
+  # 日常推薦：本機已快取、速度最快的 distil-large-v3
+  python "...\process.py" video.mp4 -m distil-large-v3
+
+  # 想要最準就換 large-v3-turbo（稍慢一點）
+  python "...\process.py" video.mp4 -m large-v3-turbo
+
+  # 需要簡體中文時才加 -t zh-CN（預設就是繁體 zh-TW）
+  python "...\process.py" video.mp4 -t zh-CN
+
+（上面 "..." 代表 C:\Users\user\.agents\skills\bilingual-subtitle\scripts，
+  實際使用時請寫完整路徑或 cd 到該目錄。）
+
+
+三、翻譯（預設 AI，Google 是備用）
+------------------------------------------------------------------------
+現在預設用 AI 翻譯，不再預設連 Google。有兩種用法，選一種就好。
+
+【做法 A：AI 自己翻（推薦，不用金鑰）】
+
+  翻譯交給 AI（也就是正在跟你對話的模型）來做，品質最好，而且不用
+  額外申請任何 API 金鑰。做法是三步：
+
+  步驟 1：只抽原文字幕，不做翻譯
+      python "...\process.py" video.mp4 -m distil-large-v3 --source-only --srt-only
+      產出：video_source.srt
+
+  步驟 2：讓 AI 讀 video_source.srt，逐條翻譯成繁體中文，寫成一個
+          純文字檔 video_zh.txt，一行一條（條數、順序要跟來源一致）
+
+  步驟 3：把譯文帶進去，合併成雙語字幕並燒錄
+      python "...\process.py" video.mp4 --source-srt video_source.srt --translation-file video_zh.txt
+
+  也可以在對話裡直接說：「用 skill 幫 1.mp4 加中英字幕」，AI 預設就會
+  照這個流程做（除非你明確說要用 Google）。
+
+【做法 B：腳本直接呼叫 AI 接口（一句指令跑完）】
+
+  先設定環境變數，之後直接跑 process.py，預設的 --translator auto 就
+  會自動使用 AI：
+
+      set AI_TRANSLATE_API_KEY=sk-...
+      set AI_TRANSLATE_BASE_URL=https://api.openai.com/v1
+      set AI_TRANSLATE_MODEL=gpt-4o-mini
+      python "...\process.py" video.mp4
+
+  本機 Ollama 不用金鑰：
+
+      set AI_TRANSLATE_BASE_URL=http://127.0.0.1:11434/v1
+      set AI_TRANSLATE_MODEL=qwen2.5:7b
+      python "...\process.py" video.mp4
+
+  沒設定任何 AI 時，腳本會停下來並印出三種做法，不會偷偷用 Google。
+
+【備用：Google 翻譯（明確指定才用）】
+
+      # 整個流程都用 Google（舊行為）
+      python "...\process.py" video.mp4 --translator google
+
+      # AI 優先，AI 失敗的批次才退回 Google
+      python "...\process.py" video.mp4 --translator ai --fallback google
+
+      # 只用 MyMemory（免費、免金鑰，品質較差）
+      python "...\process.py" video.mp4 --translator mymemory
+
+幾個要點：
+
+  - 第 3 步不會再跑一次 Whisper，直接沿用第 1 步的段落切分，所以就算
+    是 1 小時的影片，第 3 步也只要幾秒鐘。
+  - 譯文檔兩種格式都收：
+        (a) 一行一條的純文字（最簡單，推薦）
+        (b) 與來源同段數的 SRT
+  - 條數對不上會直接報錯，不會默默錯位。
+  - 想用簡體就翻成簡體，這時候不用加 -t。
+  - 真的需要時，也可以只做第 3 步的「--source-srt」來重新燒錄，
+    例如想換字型大小、換底部邊距（順便省下辨識時間）。
+
+什麼時候用哪一種？
+
+  絕大多數情況                      → AI 自己翻（做法 A，預設）
+  想一句指令跑完、有 API 金鑰      → 做法 B
+  沒網路、或你就是要 Google 的結果  → --translator google
+
+
+四、參數一覽
+------------------------------------------------------------------------
+  -o, --output           輸出影片路徑（預設 影片名_模式.mp4）
+  -l, --language         來源語言（預設 en）
+  -t, --target           目標語言（預設 zh-TW，也就是繁體中文）
+  -m, --model            Whisper 模型（預設 small），可用值見下面第四節
+  --fontsize             字體大小（預設 14，卡拉OK建議 24）
+  --margin               字幕離畫面底部距離（預設 25）
+  --srt-only             只產字幕檔，不燒錄影片
+  --source-only          只輸出原文字幕
+  --chinese-only         只輸出譯文字幕（繁體）
+  --karaoke              卡拉OK模式，逐詞高亮（輸出 .ass）
+  --highlight-color      高亮顏色，ASS 格式（預設 &H00FFFF& 黃色）
+  --no-speech-threshold  非語音過濾門檻 0-1（預設 0.6，越大越嚴格）
+  --translation-file     外部譯文檔（AI 翻譯模式），不呼叫任何翻譯接口
+  --source-srt           沿用現成的原文字幕，跳過 Whisper 辨識
+  --translator           翻譯引擎：auto（有 AI 設定就用 AI）、ai、google（備用）、mymemory
+  --fallback             AI 失敗時的備援（預設 none，可設 google）
+  --ai-model             AI 模型名稱（預設讀 AI_TRANSLATE_MODEL，否則 gpt-4o-mini）
+  --ai-base-url          OpenAI 相容接口網址（預設讀 AI_TRANSLATE_BASE_URL）
+  --ai-api-key           AI 接口金鑰（建議改用環境變數）
+
+支援 99 種語言，中英、日中、韓中、英韓… 都可以，用 -l / -t 指定即可。
+
+★ 譯文語體
+
+  預設輸出繁體中文（zh-TW）。兩者都可以用：
+      zh-TW   → 繁體中文（預設）
+      zh-CN   → 簡體中文
+      zh-Hant / zh-Hans 也接受。
+  想固定用簡體，就在指令後面加 -t zh-CN。
+
+
+五、Whisper 模型怎麼選
+------------------------------------------------------------------------
+參數 -m 可以填以下全部名稱（faster-whisper 支援的清單）：
+
+  最小最快  tiny, tiny.en, base, base.en
+  預設      small, small.en
+  較準      medium, medium.en, large, large-v1, large-v2, large-v3
+  推薦      distil-large-v3、large-v3-turbo（別名 turbo）
+  蒸餾版    distil-small.en, distil-medium.en, distil-large-v2,
+            distil-large-v3, distil-large-v3.5
+
+（結尾 .en 的是「只認英文」的版本，處理英文影片時更準更快；
+  處理中文、日文等非英語影片不要用 .en 版本。）
+
+★ 速度實測（本機 RTX 4060 Laptop 8GB，float16）
+
+  測試素材：125 秒英文語音（約 257 個詞），同一段音訊跑 3 次取中位數，
+  時間只算「推論」，不含模型載入。
+
+  模型              推論時間   即時倍速   辨識錯誤率   模型大小   本機快取
+  ---------------------------------------------------------------------
+  distil-large-v3     3.69s     34.0x       1.6%      1443MB     有
+  small（預設）       4.40s     28.5x       1.6%       461MB     有
+  large-v3-turbo      5.01s     25.0x       1.2%      1543MB     有
+
+  結論：
+   - 最快是 distil-large-v3（3.69 秒，約 34 倍即時）
+   - 最準是 large-v3-turbo（錯誤率 1.2%），但比 distil 慢約 36%
+   - small 雖然檔案最小，速度卻沒有比較快（這顆 GPU 上瓶頸在每段
+     之間的間接成本，模型太小反而喫不滿效能）
+
+  想要快就選 distil-large-v3，想要最準且不在意多等一點就選
+  large-v3-turbo。三個模型本機都已經快取好，不用再下載。
+
+  指令範例：
+      python "...\process.py" video.mp4 -m distil-large-v3
+      python "...\process.py" video.mp4 -m large-v3-turbo
+
+注意：上面用的是合成語音（乾淨、無口音、無背景音樂），所以三個模型
+的錯誤率看起來差不多。真實影片（有口音、雜訊、音樂、專有名詞）差距
+會比較明顯，那種情況建議用 turbo 或 large-v3。
+
+★ 一個重要參數：不要拿上一段當上下文
+
+  測試過程中發現 large-v3-turbo 有一個副作用：它在音訊結尾會「幻聽」，
+  自己捕出原文沒有的句子。原因是一個叫 condition_on_previous_text 的
+  參數（默認開著）——它讓模型拿上一段的結果當下一段的提示，遇到 turbo
+  這種解碼器就會結尾失控。
+
+  同一段 125 秒音訊，差別非常明顯：
+
+     設定              推論時間    錯誤率
+     cond=True       10.14s      12.1%   ← 默認值，會幻聽
+     cond=False       5.01s       1.2%   ← 快一倍、準 10 倍
+
+  本 skill 的腳本已經固定用 cond=False（distil 系列幾乎無感，
+  small 也不受影響），所以你不用自己調。
+
+
+六、輸出檔案
+------------------------------------------------------------------------
+  模式                    字幕檔                影片檔
+  ----------------------------------------------------------------
+  預設（雙語）            *_bilingual.srt      *_bilingual.mp4
+  僅譯文                  *_zh.srt             *_zh.mp4
+  僅原文                  *_source.srt         *_source.mp4
+  卡拉OK                  *_karaoke.ass        *_karaoke.mp4
+
+字幕與影片預設都放在「輸入影片所在的那個資料夾」。
+
+
+七、這台機器的安裝狀況
+------------------------------------------------------------------------
+已安裝並驗證過：
+
+  Python 3.14.3
+  FFmpeg 8.0（libass、NVENC 都有）
+  faster-whisper 1.2.1 + ctranslate2 4.8.2
+  av 18.1.0（特別降到 19 以下，見下方排錯）
+  huggingface_hub 1.33.0
+  nvidia-cublas-cu12 / nvidia-cudnn-cu12（GPU 加速用）
+  GPU：NVIDIA GeForce RTX 4060 Laptop（8GB）
+
+已下載的 Whisper 模型（都在本機快取，不用再下載）：
+
+  small                461MB
+  distil-large-v3     1443MB   ← 實測最快
+  large-v3-turbo      1543MB   ← 實測最準
+
+快取位置：C:\Users\user\.cache\huggingface\hub\models--*
+
+重新安裝依賴的指令（僅供記錄，目前不需要執行）：
+
+  pip install faster-whisper "av<19" "huggingface_hub<2" nvidia-cublas-cu12 nvidia-cudnn-cu12
+
+macOS Apple Silicon 改用：
+  pip install mlx-whisper
+
+
+八、實測結果
+------------------------------------------------------------------------
+用合成的英文語音影片測試，影片長度 10 秒（RTX 4060）：
+
+  語音辨識    faster-whisper，走 CUDA，2.3 秒（small）
+              改用 distil-large-v3 / large-v3-turbo 也很快，見第五節實測
+  翻譯        預設 AI（自己翻或走 OpenAI 相容接口）；Google 為可選備用
+              預設輸出繁體中文（zh-TW）
+  雙語燒錄    走 NVENC 硬體編碼，2.4 秒，字幕正常顯示（原文+譯文兩行）
+  卡拉OK      逐詞高亮正常（未唸到的字白色，唸到的字變黃色）
+  全流程      約 5 秒
+
+也就是說，比影片本身長度還快。
+
+
+九、幫原作者的腳本修的問題
+------------------------------------------------------------------------
+作者原始的 scripts\process.py 在這台 Windows 機器上原本跑不起來，已修正
+（技能目錄與原始碼目錄的版本都已更新）：
+
+1) GPU 偵測不再需要 torch
+   原本靠 import torch 判斷有沒有 GPU，本機沒裝 torch 就會自動退回 CPU。
+   改成用 ctranslate2 偵測，並自動把 pip 安裝的 cuBLAS / cuDNN DLL 目錄
+   註冊進 Windows 的 DLL 搜尋路徑；GPU 真的失敗才回退 CPU int8。
+
+2) 依賴版本衝突
+   - PyAV 19（av 19.x）移除了 metadata_errors 參數，會讓 faster-whisper
+     直接 TypeError，已降版到 av 18.1.0。
+   - hf_xet 與 huggingface_hub 版本不合會讓模型下載失敗，已移除 hf_xet
+     並將 huggingface_hub 固定在 2.0 以下。
+
+3) 翻譯失敗不會再默默出錯
+   現在無論用 AI 還是 Google，翻譯失敗都會留下明確線索：
+   - AI 接口 429/5xx 會自動重試（間隔 2、4 秒）
+   - 加 --fallback google 時，AI 失敗的批次會自動退回 Google
+   - 明確用 Google 時，被限流會自動改用備用接口 MyMemory
+   - 還是翻不成時，在結尾印出明確警告，告訴你有幾條沒翻成
+
+4) 譯文與畫面文字全改成繁體中文
+   原作者預設目標語言是 zh-CN（簡體），已改成 zh-TW（繁體）；
+   另外連終端機印出的提示訊息（例如「提取字幕」「翻譯批次」
+   「燒錄字幕」）也一併從簡體改成繁體，用語順便改成台灣慣用詞
+   （影片、檔案、儲存、品質、取得、串流…）。
+   需要簡體字幕時加 -t zh-CN 即可。此項只改了文字，邏輯不變。
+
+5) 長期影片不再「幻聽」
+   faster-whisper 的 condition_on_previous_text 參數預設是開的（拿上一段
+   結果當下一段提示），對 large-v3-turbo 會造成結尾捕出原文沒有的句子。
+   實測 125 秒音訊：關掉後 turbo 從 10.14 秒降到 5.01 秒，錯誤率從
+   12.1% 降到 1.2%。腳本已固定用 cond=False。
+
+6) 翻譯預設改成 AI（Google 變成備用）
+   原本只能靠 Google 翻譯，譯文品質看運氣。現在：
+   - 預設由 AI 自己翻（--source-only 抽字幕 → AI 翻 → --translation-file），
+     不需要任何金鑰，品質最好
+   - 也可以設定 OpenAI 相容接口，讓腳本一句指令直接呼叫 AI
+   - Google 翻譯只有明確加 --translator google 才會用
+   - AI 失敗時可加 --fallback google 自動退回
+   詳見第三節。
+
+想看改了什麼：在 D:\Python\bilingual-subtitle-skill 執行
+  git diff scripts/process.py
+
+
+十、常見問題排錯
+------------------------------------------------------------------------
+Q：第一次跑很久，卡在下載？
+A：正常。第一次會自動下載 Whisper 模型（small 約 500MB），之後走本機
+   快取就快了。不想下載請直接指定 -m large-v3-turbo，這個模型本機已經
+   有快取，不用下載。
+
+Q：出現 Library cublas64_12.dll is not found
+A：缺 NVIDIA 執行庫，執行
+   pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+   腳本已會自動註冊這些 DLL 目錄。
+
+Q：出現 open() got an unexpected keyword argument 'metadata_errors'
+A：PyAV 版本太新，執行 pip install "av<19"。
+
+Q：沒有 GPU 或 GPU 報錯
+A：腳本會自動回退 CPU int8，速度大約 1 倍實時（10 分鐘影片約 10 分鐘）。
+
+Q：訊息裡出現「翻譯接口返回 429（請求太頻繁）」
+A：這是 Google 對免費翻譯接口的限流，只會在你明確加 --translator google
+   時遇到（預設 AI 模式不會）。短時間內大量使用就會被鎖，通常要等
+   幾十分鐘到幾小時才會解除。現在的腳本會自動改用備用接口 MyMemory
+   繼續翻（品質略差但堪用），所以不用管它。
+
+Q：翻譯出來還是原文（沒翻成中文）
+A：代表翻譯接口沒連上（AI 設定錯誤、額度不足，或 Google 被限流）。
+   影片和原文字幕還是好的，可以先用 --source-only 只做辨識，之後再跑
+   一次；或加 --fallback google 當備援。
+
+Q：想要簡體中文怎麼辦？
+A：指令後面加 -t zh-CN 就好。預設是繁體（zh-TW），兩者走同一個翻譯
+   接口，只是目標語言代碼不同。
+
+Q：AI 翻譯翻得不好（人名、術語翻錯）
+A：改用第三節做法 A，由你正在對話的 AI 自己翻（可先給它術語表或
+   翻譯風格），通常比任何免費接口都好。
+
+Q：燒錄很慢
+A：FFmpeg 精簡版可能沒有硬體編碼器，腳本會依序回退到 libx264（純 CPU）。
+
+Q：字幕檔出來了但影片沒有字幕
+A：確認 FFmpeg 有 libass，可用 ffmpeg -filters | grep subtitles 檢查；
+   本機已確認有。
+
+
+十一、更新技能
+------------------------------------------------------------------------
+原始碼目錄就是一份 git 工作區：
+
+  cd /d D:\Python\bilingual-subtitle-skill
+  git pull
+
+拉下來後如果要更新技能目錄，把 scripts 覆蓋過去即可（注意本機對
+process.py 有客製修正，衝突時要手動合併）。
+========================================================================
